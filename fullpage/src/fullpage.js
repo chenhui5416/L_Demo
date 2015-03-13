@@ -7,6 +7,9 @@ window.fullPage = function(ele, opt) {
     'sectionColor': ['#000000']
   }
 
+  var touchStartY = 0
+  var touchEndY = 0
+
   extend(_global, opt)
   init()
 
@@ -28,13 +31,47 @@ window.fullPage = function(ele, opt) {
     }
 
 // todo 需要兼容浏览器
-    window.addEventListener('mousewheel', wheelHandler)
+    addMouseWheelHandler()
     window.addEventListener('resize', resizeHandler)
+    window.addEventListener('touchstart', touchStartHandler)
 
   }
 
+  function touchStartHandler(e) {
+    touchStartY = e.touches[0].screenY
+    document.addEventListener('touchmove', touchEndHandler, false)
+  }
+
+  function touchMoveHandler(e) {
+    touchEndY = e.touches[0].screenY
+  }
+
+  function touchEndHandler(e) {
+    touchEndY = e.touches[0].screenY
+    var dir = touchEndY - touchStartY
+    if(touchEndY != 0) {
+      if (dir > 5) {
+        sectionMove(false)
+      } else if (dir < -5) {
+        sectionMove(true)
+      } else {
+      }
+    }
+    touchEndY = 0
+    touchStartY = 0
+    console.log(dir)
+    document.removeEventListener('touchmove', touchEndHandler)
+  }
+
+  function addMouseWheelHandler() {
+    // firefox don't support mousewhell
+    window.addEventListener('mousewheel', wheelHandler, false)
+    window.addEventListener('wheel', wheelHandler, false)
+  }
+
   function wheelHandler(e) {
-    var value = e.wheelDelta
+    // deltaY for firefox
+    var value = e.wheelDelta || -e.deltaY
 
     if (value < 0) {
       sectionMove(true)
@@ -70,7 +107,6 @@ window.fullPage = function(ele, opt) {
     // dir == true 向下，false 向上
     var activeSection = document.getElementsByClassName('__section active')[0]
     var sectionHeight = activeSection.offsetHeight
-
 
     if (dir) {
       if (_global.top < sectionHeight * (_global._sectionsNum-1)){
