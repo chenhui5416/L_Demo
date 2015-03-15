@@ -3,31 +3,52 @@ window.fullPage = function(ele, opt) {
 
   var _global = {
     'sectionSelector': 'section',
-    'top': 0,
-    'sectionColor': ['#000000']
+    'offset': 0,
+    'sectionColor': ['#000000'],
+    'horizontal': false,
+    'scrollEnd': true,
+    'aniTime': 500,
+    'debug': 0
   }
 
+  var touchStartX = 0
   var touchStartY = 0
+  var touchEndX = 0
   var touchEndY = 0
 
   extend(_global, opt)
   init()
 
   function init() {
-    var _sections = document.getElementsByClassName(_global.sectionSelector)
+    var sections = document.getElementsByClassName(_global.sectionSelector)
+    _global.sectionsNum = sections.length
 
-    _sections = Array.prototype.slice.call(_sections)
-    _sections.forEach(function(a, b) {
+    sections = Array.prototype.slice.call(sections)
+
+    if (!_global.horizontal) {
+
+      sections.forEach(function(a, b) {
+        var colorId = b % _global.sectionColor.length  // 循环定义颜色
+
+        addClass(a, '__section')
+        setStyle(a, 'background-color', _global.sectionColor[colorId])
+      })
+    } else {
+      setStyle(ele, 'width', _global.sectionsNum*100 + '%')
+
+      sections.forEach(function(a, b) {
       var colorId = b % _global.sectionColor.length  // 循环定义颜色
 
-      addClass(a, '__section')
-      setStyle(a, 'background-color', _global.sectionColor[colorId])
-    })
-    _global._sectionsNum = _sections.length
+        addClass(a, '__section')
+        addClass(a, 'h_section')
+        setStyle(a, 'background-color', _global.sectionColor[colorId])
+      })
+    }
+
 
     var activeSection = document.getElementsByClassName('__section active')
     if (!activeSection.length) {
-      addClass(_sections[0], 'active')
+      addClass(sections[0], 'active')
     }
 
 // todo 需要兼容浏览器
@@ -38,33 +59,38 @@ window.fullPage = function(ele, opt) {
   }
 
   function touchStartHandler(e) {
+    touchStartX = e.touches[0].screenX
     touchStartY = e.touches[0].screenY
-    document.addEventListener('touchmove', touchEndHandler, false)
+
+    document.addEventListener('touchmove', touchMoveHandler, false)
   }
+
 
   function touchMoveHandler(e) {
     touchEndY = e.touches[0].screenY
-  }
+    touchEndX = e.touches[0].screenX
+    var v_dir = touchEndY - touchStartY
+    var h_dir = touchEndX - touchStartX
+    var dir = _global.horizontal ? h_dir : v_dir
+    // var offset = _global.offset
 
-  function touchEndHandler(e) {
-    touchEndY = e.touches[0].screenY
-    var dir = touchEndY - touchStartY
-    if(touchEndY != 0) {
+    if (touchEndY != 0 || touchEndX != 0) {
       if (dir > 5) {
-        sectionMove(false)
+        _global.offset = sectionMove(false, _global.offset, _global.horizontal)
       } else if (dir < -5) {
-        sectionMove(true)
-      } else {
+        _global.offset = sectionMove(true, _global.offset, _global.horizontal)
       }
     }
     touchEndY = 0
+    touchEndX = 0
+    touchStartX = 0
     touchStartY = 0
-    console.log(dir)
-    document.removeEventListener('touchmove', touchEndHandler)
+    document.removeEventListener('touchmove', touchMoveHandler)
   }
 
   function addMouseWheelHandler() {
     // firefox don't support mousewhell
+    // ie 11 support mousewheel wheel both, so need some handler to solve it
     window.addEventListener('mousewheel', wheelHandler, false)
     window.addEventListener('wheel', wheelHandler, false)
   }
@@ -74,19 +100,19 @@ window.fullPage = function(ele, opt) {
     var value = e.wheelDelta || -e.deltaY
 
     if (value < 0) {
-      sectionMove(true)
+      _global.offset = sectionMove(true, _global.offset, _global.horizontal)
     } else {
-      sectionMove(false)
+      _global.offset = sectionMove(false, _global.offset, _global.horizontal)
     }
   }
 
   function resizeHandler() {
     var activeSection = document.getElementsByClassName('__section active')[0]
     var index = getNodeIndex(activeSection)
-    var sectionHeight = activeSection.offsetHeight
+    var offset = _global.horizontal ? activeSection.offsetWidth : activeSection.offsetHeight
 
-    _global.top = (sectionHeight * index)
-    silentScroll(_global.top)
+    _global.offset = (offset * index)
+    silentScroll(_global.offset, _global.horizontal)
 
   }
 
@@ -103,30 +129,35 @@ window.fullPage = function(ele, opt) {
     return index
   }
 
-  function sectionMove(dir) {
-    // dir == true 向下，false 向上
+  function sectionMove(dir, offset, horizontal) {
+    // dir == true 向下 向右，false 向上 向左
     var activeSection = document.getElementsByClassName('__section active')[0]
-    var sectionHeight = activeSection.offsetHeight
+    var sectionOffset = horizontal ? activeSection.offsetWidth : activeSection.offsetHeight
+    if(!_global.scrollEnd) {
+      return offset
+    }
 
     if (dir) {
-      if (_global.top < sectionHeight * (_global._sectionsNum-1)){
-        var next = realNextSibling(activeSection)
+        if (offset < sectionOffset * (_global.sectionsNum- 1)) {
+          var next = realNextSibling(activeSection)
 
-        silentScroll(_global.top += sectionHeight)
-        removeClass(activeSection, 'active')
-        addClass(next, 'active')
-      }
+          silentScroll(offset += sectionOffset, horizontal)
+          removeClass(activeSection, 'active')
+          addClass(next, 'active')
+        }
     } else {
-      if (_global.top > 0) {
+      if (offset > 0) {
         var prev = realPrevSibling(activeSection)
 
-        silentScroll(_global.top -= sectionHeight)
+        silentScroll(offset -= sectionOffset, horizontal)
         removeClass(activeSection, 'active')
         addClass(prev, 'active')
       } else {
-        _global.top = 0
+        offset = 0
       }
+
     }
+    return offset
   }
 
   function realNextSibling(ele) {
@@ -149,13 +180,21 @@ window.fullPage = function(ele, opt) {
     return prev
   }
 
-  function silentScroll(top) {
-    var translate3d = 'translate3d(0px, -' + top + 'px, 0px)'
+  function silentScroll(value, horizontal) {
+    horizontal = horizontal || false
+    var translate3d = horizontal ? 'translate3d(-' + value +'px, 0px, 0px)' : 'translate3d(0px, -' + value + 'px, 0px)'
+
     transformContainer(translate3d, false)
+    _global.scrollEnd = false
+    setTimeout(afterScrollEnd, _global.aniTime)
+  }
+
+  function afterScrollEnd() {
+    _global.scrollEnd = true
   }
 
   function transformContainer(translate3d, animated) {
-    var transition = 'all ' + 500 + 'ms ' + 'ease';
+    var transition = 'all ' + _global.aniTime + 'ms ' + 'ease';
 
     setStyle(ele, '-webkit-transition', transition);
     setStyle(ele, 'transition', transition);
@@ -167,7 +206,7 @@ window.fullPage = function(ele, opt) {
 
 // class 操作
   function hasClass(ele, className) {
-    return !!ele.className.match(new RegExp('(\\s|^)'+className+'(\\s|$)'))
+    return !! ele.className.match(new RegExp('(\\s|^)' + className + '(\\s|$)'))
   }
 
   function addClass(ele, className) {
@@ -178,7 +217,7 @@ window.fullPage = function(ele, opt) {
 
   function removeClass(ele, className) {
     if (ele && hasClass(ele, className)) {
-      ele.className=ele.className.replace(new RegExp('(\\s|^)'+className+'(\\s|$)'),'')
+      ele.className = ele.className.replace(new RegExp('(\\s|^)' + className + '(\\s|$)'),'')
     }
   }
 

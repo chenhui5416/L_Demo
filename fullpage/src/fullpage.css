@@ -4,7 +4,15 @@ html, body {
   overflow: hidden;
   height: 100%;
 }
+
 .__section {
   position: relative;
   height: 100%;
 }
+
+.h_section {
+  float: left;
+  width: 25%;
+}
+
+
